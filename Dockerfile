@@ -1,45 +1,36 @@
-# Dockerfile
-
-# Tahap 1: Build Stage - Membangun aplikasi Next.js
+# Tahap 1: Build aplikasi
 FROM node:18 AS build
 
 WORKDIR /app
 
-# Salin file package.json dan package-lock.json
 COPY package*.json ./
 
-# Install dependencies
 RUN npm install
 
-# Salin sisa kode aplikasi
 COPY . .
 
-# Tambahkan dummy env var agar proses build tidak gagal
+# Argumen ini ada untuk memastikan 'next build' tidak gagal karena variabel lingkungan yang hilang.
 ARG POSTGRES_URL="dummy_url_for_build_only"
-# Jalankan build
 RUN npm run build
 
-
-# Tahap 2: Production Stage - Menjalankan aplikasi
+# Tahap 2: Buat image produksi yang ramping
 FROM node:18-alpine AS production
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Salin hasil build dari tahap 'build'
-# --chown=node:node memastikan file dimiliki oleh user non-root
+# Salin file yang diperlukan dari tahap build
 COPY --from=build --chown=node:node /app/.next ./.next
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/package.json ./package.json
+COPY --from=build --chown=node:node /app/public ./public
 
-# Secara otomatis mengekspos port yang ditentukan oleh Next.js (default 3000)
-# OpenShift akan menangani mapping port ini.
-EXPOSE 3000
-
-# Ganti ke user non-root untuk keamanan
+# Gunakan user non-root untuk keamanan
 USER node
 
+# Expose port yang akan digunakan oleh aplikasi
+EXPOSE 8080
+
 # Perintah untuk menjalankan aplikasi
-# Menggunakan 'node server.js' lebih andal daripada 'npm start' di dalam container
-CMD ["node", ".next/standalone/server.js"]
+CMD ["npm", "start"]
