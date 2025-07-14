@@ -1,39 +1,48 @@
+# --- Build Stage ---
+# Menggunakan image Node.js yang lebih lengkap untuk build
+FROM node:18 AS build
 
-# Tahap 1: Build Aplikasi
-FROM node:20-alpine AS builder
-
-# Set direktori kerja
+# Set working directory
 WORKDIR /app
 
-# Salin package.json dan package-lock.json
+# Copy package.json dan package-lock.json (jika ada)
 COPY package*.json ./
 
-# Instal dependensi produksi
+# Install dependencies
 RUN npm install
 
-# Salin sisa kode aplikasi
+# Copy sisa source code
 COPY . .
 
-# Bangun aplikasi
-# Kita tidak perlu lagi build-time env vars
+# Build the Next.js app
+# OpenShift/DevSandbox sudah menyediakan POSTGRES_URL saat runtime, tidak saat build.
+# Kita akan menyediakannya sebagai dummy variable saat build untuk mencegah error.
+ARG POSTGRES_URL="dummy_url_for_build_only"
 RUN npm run build
 
-# Tahap 2: Buat Image Produksi
-FROM node:20-alpine
+# --- Production Stage ---
+FROM node:18-alpine AS production
 
 WORKDIR /app
 
-# Atur environment ke produksi
+# Atur environment ke production
 ENV NODE_ENV=production
 
-# Salin build dari tahap builder
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/next.config.ts ./next.config.ts
+# Salin hanya artefak yang diperlukan dari tahap build
+COPY --from=build --chown=node:node ./.next ./.next
+COPY --from=build --chown=node:node ./public ./public
+COPY --from=build --chown=node:node ./package.json ./package.json
 
-# Ekspos port yang digunakan oleh Next.js
-EXPOSE 3000
+# Install dependencies produksi
+RUN npm install --omit=dev
+
+# Expose port yang digunakan aplikasi (8080 adalah standar untuk OpenShift)
+EXPOSE 8080
+
+# Gunakan user non-root untuk keamanan
+USER node
 
 # Perintah untuk menjalankan aplikasi
-CMD ["npm", "start", "-p", "3000"]
+# Ini adalah cara yang paling andal, langsung menjalankan server Next.js dengan Node.
+# Menghindari masalah 'next not found'.
+CMD ["node", ".next/standalone/server.js"]
