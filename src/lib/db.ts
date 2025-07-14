@@ -1,43 +1,69 @@
 
 import { Pool } from 'pg';
 
-// Konfigurasi koneksi akan diambil dari variabel lingkungan
-// Pastikan Anda membuat file .env.local di root proyek Anda
-// dengan isi sebagai berikut:
-//
-// POSTGRES_URL="postgres://user:password@host:port/database"
-//
-// Contoh:
-// POSTGRES_URL="postgres://postgres:mysecretpassword@localhost:5432/bni_prototype"
-
-// Kita akan membiarkan connectionString kosong jika POSTGRES_URL tidak ada saat build.
-// Pool akan melempar error saat koneksi pertama kali dicoba jika string koneksi tidak valid,
-// yang terjadi saat runtime, bukan saat build.
 export const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
 });
 
-// Menambahkan listener untuk memastikan kita mendapatkan error yang jelas jika koneksi gagal saat runtime.
 pool.on('error', (err, client) => {
   console.error('Unexpected error on idle client', err);
   process.exit(-1);
 });
 
-// Fungsi baru untuk memverifikasi koneksi dengan logging yang lebih baik
+const createTablesQuery = `
+  CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    phone_number VARCHAR(20) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    balance NUMERIC(15, 2) NOT NULL DEFAULT 0.00,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS transactions (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    payment_method VARCHAR(50) NOT NULL,
+    phone_number VARCHAR(20) NOT NULL,
+    transaction_type VARCHAR(50) NOT NULL,
+    nominal NUMERIC(15, 2) NOT NULL,
+    status VARCHAR(20) NOT NULL
+  );
+`;
+
+const ensureTablesExist = async () => {
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query(createTablesQuery);
+    console.log('Tabel berhasil divalidasi/dibuat.');
+  } catch (error) {
+    console.error('!!! GAGAL MEMBUAT TABEL DATABASE !!!', error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+};
+
+
 export const verifyDbConnection = async () => {
   let client;
   try {
     console.log('Mencoba menghubungkan ke database...');
     client = await pool.connect();
     console.log('Koneksi database berhasil!');
-    await client.query('SELECT NOW()'); // Kueri sederhana untuk tes
+    
+    console.log('Memastikan tabel tersedia...');
+    await ensureTablesExist();
+    
   } catch (error) {
-    console.error('!!! GAGAL MENGHUBUNGKAN KE DATABASE !!!');
-    console.error(`URL Koneksi yang Digunakan: ${process.env.POSTGRES_URL ? 'Ada (disembunyikan untuk keamanan)' : 'TIDAK DITEMUKAN'}`);
+    console.error('!!! GAGAL MENGINISIALISASI DATABASE !!!');
     if (error instanceof Error) {
         console.error('Detail Error:', error.message);
+        console.error(`URL Koneksi yang Digunakan: ${process.env.POSTGRES_URL ? 'Ada (disembunyikan untuk keamanan)' : 'TIDAK DITEMUKAN'}`);
     }
-    // Lemparkan kembali error agar endpoint API tetap gagal
     throw error;
   } finally {
     if (client) {

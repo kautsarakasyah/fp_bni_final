@@ -7,7 +7,7 @@ const DEFAULT_BALANCE = 5000000;
 
 export async function POST(req: NextRequest) {
   try {
-    // Verifikasi koneksi DB terlebih dahulu
+    // Verifikasi koneksi dan pastikan tabel ada
     await verifyDbConnection();
       
     const { email, username, phone_number, password } = await req.json();
@@ -18,7 +18,6 @@ export async function POST(req: NextRequest) {
 
     const client = await pool.connect();
     try {
-      // Cek apakah email, username, atau nomor telepon sudah ada
       const checkQuery = `
         SELECT 
           (SELECT 1 FROM users WHERE email = $1) as email_exists,
@@ -38,10 +37,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ message: 'Nomor telepon sudah terdaftar.' }, { status: 409 });
       }
 
-      // Hash password
       const password_hash = await bcrypt.hash(password, 10);
       
-      // Simpan pengguna baru dan kembalikan hanya data yang aman
       const insertQuery = `
         INSERT INTO users (email, username, phone_number, password_hash, balance)
         VALUES ($1, $2, $3, $4, $5)

@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs';
 
 export async function POST(req: NextRequest) {
   try {
-    // Verifikasi koneksi DB terlebih dahulu
+    // Verifikasi koneksi dan pastikan tabel ada
     await verifyDbConnection();
 
     const { identifier, password } = await req.json();
@@ -16,7 +16,6 @@ export async function POST(req: NextRequest) {
 
     const client = await pool.connect();
     try {
-      // Cek apakah identifier adalah email atau username
       const isEmail = identifier.includes('@');
       
       const query = isEmail
@@ -36,7 +35,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ message: 'User ID atau password salah.' }, { status: 401 });
       }
 
-      // Jangan kirim password hash ke client
       const { password_hash, ...userToReturn } = user;
 
       return NextResponse.json(userToReturn, { status: 200 });
