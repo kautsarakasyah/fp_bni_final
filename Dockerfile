@@ -1,48 +1,45 @@
-# --- Build Stage ---
-# Menggunakan image Node.js yang lebih lengkap untuk build
+# Dockerfile
+
+# Tahap 1: Build Stage - Membangun aplikasi Next.js
 FROM node:18 AS build
 
-# Set working directory
 WORKDIR /app
 
-# Copy package.json dan package-lock.json (jika ada)
+# Salin file package.json dan package-lock.json
 COPY package*.json ./
 
 # Install dependencies
 RUN npm install
 
-# Copy sisa source code
+# Salin sisa kode aplikasi
 COPY . .
 
-# Build the Next.js app
-# OpenShift/DevSandbox sudah menyediakan POSTGRES_URL saat runtime, tidak saat build.
-# Kita akan menyediakannya sebagai dummy variable saat build untuk mencegah error.
+# Tambahkan dummy env var agar proses build tidak gagal
 ARG POSTGRES_URL="dummy_url_for_build_only"
+# Jalankan build
 RUN npm run build
 
-# --- Production Stage ---
+
+# Tahap 2: Production Stage - Menjalankan aplikasi
 FROM node:18-alpine AS production
 
 WORKDIR /app
 
-# Atur environment ke production
 ENV NODE_ENV=production
 
-# Salin hanya artefak yang diperlukan dari tahap build
-COPY --from=build --chown=node:node ./.next ./.next
-COPY --from=build --chown=node:node ./public ./public
-COPY --from=build --chown=node:node ./package.json ./package.json
+# Salin hasil build dari tahap 'build'
+# --chown=node:node memastikan file dimiliki oleh user non-root
+COPY --from=build --chown=node:node /app/.next ./.next
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/package.json ./package.json
 
-# Install dependencies produksi
-RUN npm install --omit=dev
+# Secara otomatis mengekspos port yang ditentukan oleh Next.js (default 3000)
+# OpenShift akan menangani mapping port ini.
+EXPOSE 3000
 
-# Expose port yang digunakan aplikasi (8080 adalah standar untuk OpenShift)
-EXPOSE 8080
-
-# Gunakan user non-root untuk keamanan
+# Ganti ke user non-root untuk keamanan
 USER node
 
 # Perintah untuk menjalankan aplikasi
-# Ini adalah cara yang paling andal, langsung menjalankan server Next.js dengan Node.
-# Menghindari masalah 'next not found'.
+# Menggunakan 'node server.js' lebih andal daripada 'npm start' di dalam container
 CMD ["node", ".next/standalone/server.js"]
