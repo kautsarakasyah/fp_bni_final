@@ -1,3 +1,4 @@
+
 # Tahap 1: Build Aplikasi
 FROM node:20-alpine AS builder
 
@@ -7,33 +8,31 @@ WORKDIR /app
 # Salin package.json dan package-lock.json
 COPY package*.json ./
 
-# Instal dependensi
+# Instal dependensi produksi
 RUN npm install
 
 # Salin sisa kode aplikasi
 COPY . .
 
-# Build aplikasi untuk produksi
-# Menambahkan variabel lingkungan untuk build
-ARG POSTGRES_URL
-ENV POSTGRES_URL=$POSTGRES_URL
+# Bangun aplikasi
+# Kita tidak perlu lagi build-time env vars
 RUN npm run build
 
-# Tahap 2: Buat Production Image
+# Tahap 2: Buat Image Produksi
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Salin dependensi dari tahap builder
-COPY --from=builder /app/node_modules ./node_modules
-# Salin folder .next yang sudah di-build
-COPY --from=builder /app/.next ./.next
-# Salin package.json
-COPY package.json .
-# Salin folder public
-COPY public ./public
+# Atur environment ke produksi
+ENV NODE_ENV=production
 
-# Expose port yang digunakan Next.js
+# Salin build dari tahap builder
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/next.config.ts ./next.config.ts
+
+# Ekspos port yang digunakan oleh Next.js
 EXPOSE 3000
 
 # Perintah untuk menjalankan aplikasi
