@@ -1,10 +1,13 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { pool } from '@/lib/db';
+import { pool, verifyDbConnection } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
 export async function POST(req: NextRequest) {
   try {
+    // Verifikasi koneksi DB terlebih dahulu
+    await verifyDbConnection();
+
     const { identifier, password } = await req.json();
 
     if (!identifier || !password) {

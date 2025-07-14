@@ -22,3 +22,27 @@ pool.on('error', (err, client) => {
   console.error('Unexpected error on idle client', err);
   process.exit(-1);
 });
+
+// Fungsi baru untuk memverifikasi koneksi dengan logging yang lebih baik
+export const verifyDbConnection = async () => {
+  let client;
+  try {
+    console.log('Mencoba menghubungkan ke database...');
+    client = await pool.connect();
+    console.log('Koneksi database berhasil!');
+    await client.query('SELECT NOW()'); // Kueri sederhana untuk tes
+  } catch (error) {
+    console.error('!!! GAGAL MENGHUBUNGKAN KE DATABASE !!!');
+    console.error(`URL Koneksi yang Digunakan: ${process.env.POSTGRES_URL ? 'Ada (disembunyikan untuk keamanan)' : 'TIDAK DITEMUKAN'}`);
+    if (error instanceof Error) {
+        console.error('Detail Error:', error.message);
+    }
+    // Lemparkan kembali error agar endpoint API tetap gagal
+    throw error;
+  } finally {
+    if (client) {
+      client.release();
+      console.log('Koneksi database dilepaskan.');
+    }
+  }
+};

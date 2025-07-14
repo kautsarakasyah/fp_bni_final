@@ -1,12 +1,15 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { pool } from '@/lib/db';
+import { pool, verifyDbConnection } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
 const DEFAULT_BALANCE = 5000000;
 
 export async function POST(req: NextRequest) {
   try {
+    // Verifikasi koneksi DB terlebih dahulu
+    await verifyDbConnection();
+      
     const { email, username, phone_number, password } = await req.json();
 
     if (!email || !username || !phone_number || !password) {
